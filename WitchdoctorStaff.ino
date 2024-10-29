@@ -31,7 +31,7 @@ Connectos
 
  (2024) JinjiroSan
 
- ledcosplay.ino : v1-0.1 (alpha) - refactor C0.0.0
+ ledcosplay.ino : v1-1.2 (alpha) - refactor C1.0.0
 */
 
 #include <Adafruit_NeoPixel.h>
@@ -40,8 +40,8 @@ Connectos
 #define LED_PIN_C7     7  // one connector for LEDstrips
 
 // How many NeoPixels are attached to each pin
-#define LED_COUNT_C6  10
-#define LED_COUNT_C7  17
+#define LED_COUNT_C6  18
+#define LED_COUNT_C7  30
 
 // NeoPixel brightness, 0 (min) to 255 (max)
 #define BRIGHTNESS_C6 50
@@ -50,6 +50,12 @@ Connectos
 #define BUTTON_PIN_T2 2
 #define BUTTON_PIN_T3 3
 #define BUTTON_PIN_T4 4
+
+// Brightness levels for each pattern
+int brightnessPatternOne = 100;
+int brightnessPatternTwo = 50;
+int brightnessPatternThree = 75;
+int brightnessPatternFour = 30;
 
 // Declare our NeoPixel strip object:
 Adafruit_NeoPixel strip_C6(LED_COUNT_C6, LED_PIN_C6, NEO_GRBW + NEO_KHZ800);
@@ -61,12 +67,12 @@ int buttonState_T4 = 0;
 
 void setup() {
   strip_C6.begin();
-  strip_C6.show();
   strip_C6.setBrightness(BRIGHTNESS_C6);
+  strip_C6.show();
 
   strip_C7.begin();
-  strip_C7.show();
   strip_C7.setBrightness(BRIGHTNESS_C7);
+  strip_C7.show();
 
   pinMode(BUTTON_PIN_T2, INPUT_PULLUP);
   pinMode(BUTTON_PIN_T3, INPUT_PULLUP);
@@ -74,14 +80,90 @@ void setup() {
 }
 
 void patternOne() {
+  // Set brightness for both strips before starting the pattern
+  strip_C6.setBrightness(brightnessPatternOne);
+  strip_C7.setBrightness(brightnessPatternOne);
+  strip_C6.show();
+  strip_C7.show();
+  
+  // Set alternating colors (blue-purple) for both strips
+  for (int i = 0; i < strip_C6.numPixels(); i++) {
+    if (i % 2 == 0) {
+      strip_C6.setPixelColor(i, strip_C6.Color(0, 0, 255));  // Blue
+    } else {
+      strip_C6.setPixelColor(i, strip_C6.Color(128, 0, 128));  // Purple
+    }
+  }
+  for (int i = 0; i < strip_C7.numPixels(); i++) {
+    if (i % 2 == 0) {
+      strip_C7.setPixelColor(i, strip_C7.Color(0, 0, 255));  // Blue
+    } else {
+      strip_C7.setPixelColor(i, strip_C7.Color(128, 0, 128));  // Purple
+    }
+  }
+  strip_C6.show();
+  strip_C7.show();
+
+  // Breathing effect using a sine wave pattern for smooth brightness changes
+  for (int i = 0; i < 360; i += 5) {
+    float radian = i * (3.14159 / 180.0);  // Convert degrees to radians
+    int brightness = (sin(radian) * 127) + 128;  // Calculate brightness (0-255)
+
+    strip_C6.setBrightness(brightness);
+    strip_C7.setBrightness(brightness);
+    strip_C6.show();
+    strip_C7.show();
+    delay(30);
+  }
+
+  // Reset brightness to original value
+  strip_C6.setBrightness(BRIGHTNESS_C6);
+  strip_C7.setBrightness(BRIGHTNESS_C7);
+  strip_C6.show();
+  strip_C7.show();
+}
+
+void patternTwo() {
+  strip_C6.setBrightness(brightnessPatternTwo);
+  strip_C7.setBrightness(brightnessPatternTwo);
+  strip_C6.show();
+  strip_C7.show();
+
+  // Step 1: Animate C7 strip in red from end to start
+  for (int i = strip_C7.numPixels() - 1; i >= 0; i--) {
+    strip_C7.setPixelColor(i, strip_C7.Color(255, 0, 0));
+    strip_C7.show();
+    delay(50);
+    if (i <= strip_C7.numPixels() - 4) {
+      strip_C7.setPixelColor(i + 3, strip_C7.Color(0, 0, 0));
+    }
+  }
+  for (int i = 0; i < 3; i++) {
+    strip_C7.setPixelColor(i, strip_C7.Color(0, 0, 0));
+    strip_C7.show();
+    delay(50);
+  }
+
+  // Step 2: Animate C6 strip in red from end to start (Pattern One)
   for (int i = strip_C6.numPixels() - 1; i >= 0; i--) {
     strip_C6.setPixelColor(i, strip_C6.Color(180, 0, 0));
     strip_C6.show();
     delay(50);
   }
+
+  // Reset brightness to original value
+  strip_C6.setBrightness(BRIGHTNESS_C6);
+  strip_C7.setBrightness(BRIGHTNESS_C7);
+  strip_C6.show();
+  strip_C7.show();
 }
 
-void patternTwo() {
+void patternThree() {
+  strip_C6.setBrightness(brightnessPatternThree);
+  strip_C7.setBrightness(brightnessPatternThree);
+  strip_C6.show();
+  strip_C7.show();
+
   for (int i = 0; i < 50; i++) {
     int randomPixel_C6 = random(strip_C6.numPixels());
     int randomPixel_C7 = random(strip_C7.numPixels());
@@ -97,11 +179,19 @@ void patternTwo() {
     strip_C6.setPixelColor(randomPixel_C6, strip_C6.Color(0, 0, 0, 0));
     strip_C7.setPixelColor(randomPixel_C7, strip_C7.Color(0, 0, 0, 0));
   }
+
+  // Reset brightness to original value
+  strip_C6.setBrightness(BRIGHTNESS_C6);
+  strip_C7.setBrightness(BRIGHTNESS_C7);
+  strip_C6.show();
+  strip_C7.show();
 }
 
-void patternThree() {
-  strip_C6.setBrightness(50);
-  strip_C7.setBrightness(50);
+void patternFour() {
+  strip_C6.setBrightness(brightnessPatternFour);
+  strip_C7.setBrightness(brightnessPatternFour);
+  strip_C6.show();
+  strip_C7.show();
 
   unsigned long startTimeC6 = millis();
   unsigned long startTimeC7 = millis();
@@ -148,22 +238,12 @@ void patternThree() {
       c6Running = false;
     }
   }
-}
 
-void patternFour() {
-  for (int i = strip_C7.numPixels() - 1; i >= 0; i--) {
-    strip_C7.setPixelColor(i, strip_C7.Color(255, 0, 0));
-    strip_C7.show();
-    delay(50);
-    if (i <= strip_C7.numPixels() - 4) {
-      strip_C7.setPixelColor(i + 3, strip_C7.Color(0, 0, 0));
-    }
-  }
-  for (int i = 0; i < 3; i++) {
-    strip_C7.setPixelColor(i, strip_C7.Color(0, 0, 0));
-    strip_C7.show();
-    delay(50);
-  }
+  // Reset brightness to original value
+  strip_C6.setBrightness(BRIGHTNESS_C6);
+  strip_C7.setBrightness(BRIGHTNESS_C7);
+  strip_C6.show();
+  strip_C7.show();
 }
 
 void loop() {
