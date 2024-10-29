@@ -31,7 +31,7 @@ Connectos
 
  (2024) JinjiroSan
 
- ledcosplay.ino : v1-1.2 (alpha) - refactor C1.0.0
+ ledcosplay.ino : v1-1.3 (alpha) - refactor C1.0.0
 */
 
 #include <Adafruit_NeoPixel.h>
@@ -52,7 +52,7 @@ Connectos
 #define BUTTON_PIN_T4 4
 
 // Brightness levels for each pattern
-int brightnessPatternOne = 100;
+int brightnessPatternOne = 50;
 int brightnessPatternTwo = 50;
 int brightnessPatternThree = 75;
 int brightnessPatternFour = 30;
@@ -109,8 +109,10 @@ void patternOne() {
     float radian = i * (3.14159 / 180.0);  // Convert degrees to radians
     int brightness = (sin(radian) * 127) + 128;  // Calculate brightness (0-255)
 
-    strip_C6.setBrightness(brightness);
-    strip_C7.setBrightness(brightness);
+    int adjustedBrightness = (brightness * brightnessPatternOne) / 255; // Adjust brightness according to patternOne level
+
+    strip_C6.setBrightness(adjustedBrightness);
+    strip_C7.setBrightness(adjustedBrightness);
     strip_C6.show();
     strip_C7.show();
     delay(30);
