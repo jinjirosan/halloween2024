@@ -1,7 +1,7 @@
 // TheEvil Witchdoctor's Hat With 5 Eyes
 // (2024) Voor m'n lieve guppie
 //
-// WitchdoctorHat.ino : v0.6-refactor 0.0.0 (dev release!)
+// WitchdoctorHat.ino : v0.6-refactor c0.0.0 (dev release!)
 
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
@@ -19,20 +19,18 @@ const int switchPinOperation = 2; // Pin for normal operation switch (D2)
 bool isTestMode = false;          // Initially, not in test mode
 bool isMoving = false;            // Initially, no movement
 
-unsigned long previousMillisServo = 0;
-unsigned long previousMillisLED = 0;
-unsigned long previousMillisBlink = 0;       // For LED blinking
-unsigned long previousMillisServoSelect = 0; // For changing active servos
+unsigned long previousMillisServo[6] = {0, 0, 0, 0, 0, 0};
+unsigned long previousMillisLED[6] = {0, 0, 0, 0, 0, 0};
+unsigned long previousMillisBlink[6] = {0, 0, 0, 0, 0, 0};  // For LED blinking
 const long intervalServo = 30;    // Adjusted interval for smooth servo movement
 const long intervalLED = 50;      // Adjusted interval for smoother LED fade
 const long blinkInterval = 500;   // LED blink interval (500ms)
-const long changeActiveInterval = 5000;  // Change active servos every 5 seconds
 
 int currentServoAngle[6] = {35, 35, 35, 35, 35, 35}; // Start all at the leftmost angle
 int servoDirection[6] = {1, 1, 1, 1, 1, 1};          // 1 for sweeping right, -1 for sweeping left
-bool ledState = false;                               // LED state for blinking
-
-int activeServos[3] = {0, 1, 2};  // Initially, servos 0, 1, and 2 are active
+bool ledState[6] = {false, false, false, false, false, false}; // LED state for blinking
+int stage[6] = {0, 0, 0, 0, 0, 0};
+unsigned long stageStart[6] = {0, 0, 0, 0, 0, 0};
 
 void setup() {
   pinMode(switchPinTestMode, INPUT_PULLUP);  // Use internal pull-up resistor for test mode switch (D3)
@@ -64,13 +62,15 @@ void loop() {
 
   if (isTestMode) {
     // Run test mode logic: synchronized servos and LEDs
-    if (currentMillis - previousMillisServo >= intervalServo) {
-      previousMillisServo = currentMillis;
-      updateServos(); // Synchronized servo movement
-    }
-    if (currentMillis - previousMillisLED >= intervalLED) {
-      previousMillisLED = currentMillis;
-      updateLEDs();   // Synchronized LED fading
+    for (int i = 0; i < 6; i++) {
+      if (currentMillis - previousMillisServo[i] >= intervalServo) {
+        previousMillisServo[i] = currentMillis;
+        updateServoTestMode(i); // Synchronized servo movement per servo
+      }
+      if (currentMillis - previousMillisLED[i] >= intervalLED) {
+        previousMillisLED[i] = currentMillis;
+        updateLEDTestMode(i); // Synchronized LED fading per LED
+      }
     }
   } else {
     // Check if pin D2 is connected (LOW) or disconnected (HIGH)
@@ -81,14 +81,9 @@ void loop() {
         pwm.setPWM(ledChannels[i], 0, 2048); // Set each LED to 50% brightness
       }
     } else {
-      // Normal operations with random selection of 3 servos
-      if (currentMillis - previousMillisServoSelect >= changeActiveInterval) {
-        previousMillisServoSelect = currentMillis;
-        selectRandomServos(); // Change the active servos every 5 seconds
-      }
-      // Call separate functions for each servo-LED pair
-      for (int i = 0; i < 3; i++) {
-        operateServoLEDPair(activeServos[i], currentMillis); // Run specific logic for active servos
+      // Normal operations for all servos and LEDs
+      for (int i = 0; i < 5; i++) { // Only iterate over connected servos (0-4)
+        operateServoLEDPair(i, currentMillis); // Run specific logic for each servo
       }
     }
   }
@@ -100,151 +95,175 @@ void centerServo(int servoIndex) {
   pwm.setPWM(servoChannels[servoIndex], 0, pulseLength);
 }
 
-// Function to update all servo positions in test mode
-void updateServos() {
-  for (int i = 0; i < 6; i++) {
-    int pulseLength = map(currentServoAngle[i], 0, 180, 150, 600);  // Adjust pulse for servo angle
-    pwm.setPWM(servoChannels[i], 0, pulseLength);
+// Function to update servo position in test mode
+void updateServoTestMode(int servoIndex) {
+  int pulseLength = map(currentServoAngle[servoIndex], 0, 180, 150, 600);  // Adjust pulse for servo angle
+  pwm.setPWM(servoChannels[servoIndex], 0, pulseLength);
 
-    // Update servo angle for sweeping in test mode
-    currentServoAngle[i] += servoDirection[i];
-    if (currentServoAngle[i] >= right || currentServoAngle[i] <= left) {
-      servoDirection[i] = -servoDirection[i];  // Reverse direction at the edges
-    }
+  // Update servo angle for sweeping in test mode
+  currentServoAngle[servoIndex] += servoDirection[servoIndex];
+  if (currentServoAngle[servoIndex] >= right || currentServoAngle[servoIndex] <= left) {
+    servoDirection[servoIndex] = -servoDirection[servoIndex];  // Reverse direction at the edges
   }
 }
 
 // Function to update LED brightness corresponding to servo positions in test mode
-void updateLEDs() {
-  for (int i = 0; i < 6; i++) {
-    int brightness = map(currentServoAngle[i], left, right, 0, 4095);  // Brightness based on servo position
-    pwm.setPWM(ledChannels[i], 0, brightness);
-  }
-}
-
-// Function to select 3 random active servos every 5 seconds
-void selectRandomServos() {
-  int indices[] = {0, 1, 2, 3, 4, 5}; // All servo indices
-  // Shuffle the array to randomly select the first 3 servos
-  for (int i = 0; i < 6; i++) {
-    int j = random(i, 6);  // Random index between i and the end of the array
-    int temp = indices[i];
-    indices[i] = indices[j];
-    indices[j] = temp;
-  }
-  // Set the first 3 as active
-  activeServos[0] = indices[0];
-  activeServos[1] = indices[1];
-  activeServos[2] = indices[2];
+void updateLEDTestMode(int servoIndex) {
+  int brightness = map(currentServoAngle[servoIndex], left, right, 0, 4095);  // Brightness based on servo position
+  pwm.setPWM(ledChannels[servoIndex], 0, brightness);
 }
 
 // Function to handle specific behavior for each servo-LED pair
 void operateServoLEDPair(int servoIndex, unsigned long currentMillis) {
   switch (servoIndex) {
     case 0:
-      // Fast movement and fast blinking for Servo 0 (Channel 0) and LED 0 (Channel 8)
-      fastOperationServo0LED0(currentMillis);  // Custom function for Servo 0 and LED 0
+      operationModeCase0(servoIndex, currentMillis);
       break;
     case 1:
-      // Normal operation for Servo 1 (Channel 1) and LED 1 (Channel 9)
-      normalOperationServo1LED1(currentMillis);  // Custom function for Servo 1 and LED 1
+      //operationModeCase1(servoIndex, currentMillis);
       break;
     case 2:
-      // Custom behavior for Servo 2 and LED 2
-      moveServoRandom(servoIndex);
-      blinkLED(servoIndex, currentMillis);
+      //operationModeCase2(servoIndex, currentMillis);
       break;
     case 3:
-      // Custom behavior for Servo 3 and LED 3
-      moveServoRandom(servoIndex);
-      blinkLED(servoIndex, currentMillis);
+      //operationModeCase3(servoIndex, currentMillis);
       break;
     case 4:
-      // Custom behavior for Servo 4 and LED 4
-      moveServoRandom(servoIndex);
-      blinkLED(servoIndex, currentMillis);
+      //operationModeCase4(servoIndex, currentMillis);
+      break;
+  }
+}
+
+// Function for operation mode case 0
+void operationModeCase0(int servoIndex, unsigned long currentMillis) {
+  switch (stage[servoIndex]) {
+    case 0:
+      // Center the eye for 3 seconds
+      centerServo(servoIndex);
+      pwm.setPWM(ledChannels[servoIndex], 0, 4095); // LED stays on
+      if (currentMillis - stageStart[servoIndex] >= 3000) {
+        stage[servoIndex] = 1;
+        stageStart[servoIndex] = currentMillis;
+      }
+      break;
+    case 1:
+      // Move swiftly to the left
+      int pulseLengthLeft = map(left, 0, 180, 150, 600);
+      pwm.setPWM(servoChannels[servoIndex], 0, pulseLengthLeft);
+      if (currentMillis - stageStart[servoIndex] >= 2000) {
+        stage[servoIndex] = 2;
+        stageStart[servoIndex] = currentMillis;
+      }
+      break;
+    case 2:
+      // Blink twice at the left boundary
+      if (currentMillis - stageStart[servoIndex] < 1000) {
+        blinkLED(servoIndex, currentMillis);
+      } else {
+        stage[servoIndex] = 3;
+        stageStart[servoIndex] = currentMillis;
+      }
+      break;
+    case 3:
+      // Move slowly back to center
+      int pulseLengthCenter = map(center, 0, 180, 150, 600);
+      pwm.setPWM(servoChannels[servoIndex], 0, pulseLengthCenter); // Slow move back to center
+      if (currentMillis - stageStart[servoIndex] >= 3000) {
+        stage[servoIndex] = 4;
+        stageStart[servoIndex] = currentMillis;
+      }
+      break;
+    case 4:
+      // Center for 3 seconds
+      centerServo(servoIndex);
+      if (currentMillis - stageStart[servoIndex] >= 3000) {
+        stage[servoIndex] = 5;
+        stageStart[servoIndex] = currentMillis;
+      }
       break;
     case 5:
-      // Custom behavior for Servo 5 and LED 5
-      moveServoRandom(servoIndex);
-      blinkLED(servoIndex, currentMillis);
+      // Move swiftly to the right
+      int pulseLengthRight = map(right, 0, 180, 150, 600);
+      pwm.setPWM(servoChannels[servoIndex], 0, pulseLengthRight);
+      if (currentMillis - stageStart[servoIndex] >= 2000) {
+        stage[servoIndex] = 6;
+        stageStart[servoIndex] = currentMillis;
+      }
+      break;
+    case 6:
+      // Blink twice at the right boundary
+      if (currentMillis - stageStart[servoIndex] < 1000) {
+        blinkLED(servoIndex, currentMillis);
+      } else {
+        stage[servoIndex] = 7;
+        stageStart[servoIndex] = currentMillis;
+      }
+      break;
+    case 7:
+      // Move slowly back to center
+      pwm.setPWM(servoChannels[servoIndex], 0, pulseLengthCenter); // Slow move back to center
+      if (currentMillis - stageStart[servoIndex] >= 3000) {
+        stage[servoIndex] = 0;
+        stageStart[servoIndex] = currentMillis;
+      }
       break;
   }
 }
 
-// Function for fast movement and fast blinking for Servo 0 and LED 0
-void fastOperationServo0LED0(unsigned long currentMillis) {
-  static int servo0Angle = left;           // Start at the leftmost position
-  static int servo0Direction = 1;          // 1 for sweeping right, -1 for sweeping left
-  static bool led0State = false;           // Track the current state of the LED
-
-  const long fastServoInterval = 10;       // Short interval for fast movement
-  const long fastBlinkInterval = 100;      // Faster blink interval (100ms)
-
-  // Handle fast servo movement
-  if (currentMillis - previousMillisServo >= fastServoInterval) {
-    previousMillisServo = currentMillis;
-    servo0Angle += servo0Direction * 10;   // Move by steps of 10 for rapid movement
-
-    if (servo0Angle >= right || servo0Angle <= left) {
-      servo0Direction = -servo0Direction;  // Reverse direction at the edges
+// Function for operation mode case 1
+void operationModeCase1(int servoIndex, unsigned long currentMillis) {
+  if (stage[servoIndex] == 0) {
+    // Move back and forth continuously
+    if (currentMillis - previousMillisServo[servoIndex] >= intervalServo) {
+      previousMillisServo[servoIndex] = currentMillis;
+      int pulseLength = map(currentServoAngle[servoIndex], 0, 180, 150, 600);
+      pwm.setPWM(servoChannels[servoIndex], 0, pulseLength);
+      currentServoAngle[servoIndex] += servoDirection[servoIndex];
+      if (currentServoAngle[servoIndex] >= right || currentServoAngle[servoIndex] <= left) {
+        servoDirection[servoIndex] = -servoDirection[servoIndex];
+      }
     }
-
-    int pulseLength = map(servo0Angle, 0, 180, 150, 600);  // Map angle to pulse length
-    pwm.setPWM(servoChannels[0], 0, pulseLength);          // Update Servo 0 position
-  }
-
-  // Handle fast LED blinking
-  if (currentMillis - previousMillisBlink >= fastBlinkInterval) {
-    previousMillisBlink = currentMillis;
-    led0State = !led0State;  // Toggle LED state
-
-    if (led0State) {
-      pwm.setPWM(ledChannels[0], 0, 4095);  // Turn LED 0 on
-    } else {
-      pwm.setPWM(ledChannels[0], 0, 0);     // Turn LED 0 off
+    if (currentMillis - previousMillisLED[servoIndex] >= intervalLED) {
+      previousMillisLED[servoIndex] = currentMillis;
+      updateLEDTestMode(servoIndex);
     }
   }
 }
 
-// Normal operation for Servo 1 (Channel 1) and LED 1 (Channel 9)
-void normalOperationServo1LED1(unsigned long currentMillis) {
-  // Servo 1 random movement logic
-  if (currentMillis - previousMillisServo >= intervalServo) {
-    previousMillisServo = currentMillis;
-    int randomAngle = random(left, right);  // Random angle within the set boundaries
-    int pulseLength = map(randomAngle, 0, 180, 150, 600);  // Map to pulse length for servo
-    pwm.setPWM(servoChannels[1], 0, pulseLength);  // Update Servo 1
-  }
-
-  // LED 1 blinking logic
-  if (currentMillis - previousMillisBlink >= blinkInterval) {
-    previousMillisBlink = currentMillis;
-    ledState = !ledState;  // Toggle LED state
-    if (ledState) {
-      pwm.setPWM(ledChannels[1], 0, 4095);  // Turn LED 1 on
-    } else {
-      pwm.setPWM(ledChannels[1], 0, 0);  // Turn LED 1 off
-    }
+// Function for operation mode case 2
+void operationModeCase2(int servoIndex, unsigned long currentMillis) {
+  if (stage[servoIndex] == 0) {
+    // Fade LED in and out
+    int brightness = map(currentMillis % 4000, 0, 2000, 0, 4095);
+    pwm.setPWM(ledChannels[servoIndex], 0, brightness);
   }
 }
 
-// Function to move servo randomly
-void moveServoRandom(int servoIndex) {
-  int randomAngle = random(left, right);  // Random angle within the set boundaries
-  int pulseLength = map(randomAngle, 0, 180, 150, 600);  // Map to pulse length for servo
-  pwm.setPWM(servoChannels[servoIndex], 0, pulseLength);  // Update servo
+// Function for operation mode case 3
+void operationModeCase3(int servoIndex, unsigned long currentMillis) {
+  if (stage[servoIndex] == 0) {
+    // Center servo and keep LED on
+    centerServo(servoIndex);
+    pwm.setPWM(ledChannels[servoIndex], 0, 4095); // LED on
+  }
+}
+
+// Function for operation mode case 4
+void operationModeCase4(int servoIndex, unsigned long currentMillis) {
+  if (stage[servoIndex] == 0) {
+    // Center servo and keep LED on
+    centerServo(servoIndex);
+    pwm.setPWM(ledChannels[servoIndex], 0, 4095); // LED on
+  }
 }
 
 // Function to blink LED
 void blinkLED(int servoIndex, unsigned long currentMillis) {
-  static bool ledState = false;  // Track the current state of the LED
+  if (currentMillis - previousMillisBlink[servoIndex] >= blinkInterval) {
+    previousMillisBlink[servoIndex] = currentMillis;
+    ledState[servoIndex] = !ledState[servoIndex];  // Toggle the LED state
 
-  if (currentMillis - previousMillisBlink >= blinkInterval) {
-    previousMillisBlink = currentMillis;
-    ledState = !ledState;  // Toggle the LED state
-
-    if (ledState) {
+    if (ledState[servoIndex]) {
       pwm.setPWM(ledChannels[servoIndex], 0, 4095);  // Turn the LED on
     } else {
       pwm.setPWM(ledChannels[servoIndex], 0, 0);  // Turn the LED off
